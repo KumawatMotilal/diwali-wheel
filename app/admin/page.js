@@ -124,6 +124,20 @@ export default function Admin() {
     }
   }
 
+  // copy many links at once, one per line: "Name - link"
+  async function copyAll(onlyNew) {
+    const list = players.filter((p) => !onlyNew || p.status === "new");
+    if (!list.length) return setMsg("No players to copy");
+    const text = list.map((p) => `${p.name} - ${linkFor(p.token)}`).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(onlyNew ? "all-new" : "all");
+      setTimeout(() => setCopied(""), 1800);
+    } catch {
+      window.prompt("Copy these links:", text);
+    }
+  }
+
   function whatsapp(p) {
     const text = `Hi ${p.name}! 🪔 Happy Diwali! Play the ${cfg?.name || "Lucky Wheel"} and win a gift. Your personal link (works only once): ${linkFor(p.token)}`;
     window.open("https://wa.me/?text=" + encodeURIComponent(text), "_blank");
@@ -300,6 +314,15 @@ export default function Admin() {
             <span>Won: <b>{count("won")}</b></span>
             <span>Lost: <b>{count("failed")}</b></span>
             <span>Started: <b>{count("started")}</b></span>
+          </div>
+
+          <div className="actions" style={{ marginTop: 0, marginBottom: 10 }}>
+            <button className="btn small" disabled={!players.length} onClick={() => copyAll(false)}>
+              {copied === "all" ? "Copied ✓" : `Copy all links (${players.length})`}
+            </button>
+            <button className="btn small ghost" disabled={!count("new")} onClick={() => copyAll(true)}>
+              {copied === "all-new" ? "Copied ✓" : `Copy not-played links (${count("new")})`}
+            </button>
           </div>
 
           <div className="table-wrap">
