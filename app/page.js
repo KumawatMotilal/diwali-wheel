@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import Wheel from "@/components/Wheel";
 import Challenge from "@/components/Challenge";
 import ResultModal from "@/components/ResultModal";
-import { CATS, GAMES, GAME_KEYS } from "@/lib/cats";
+import { gameInfo, GAME_KEYS } from "@/lib/cats";
+import { T, DEFAULT_TITLE } from "@/lib/i18n";
 import Icon, { Toran } from "@/components/Icon";
 
 // Player page. Opened with the personal one-time link:  /?p=<token>
@@ -12,6 +13,7 @@ export default function Home() {
   const [info, setInfo] = useState(null);
   const [screen, setScreen] = useState("loading");
   const [error, setError] = useState("");
+  const [errKey, setErrKey] = useState("");
   const [outcome, setOutcome] = useState(null);
   const [spin, setSpin] = useState(null);
   const [spinning, setSpinning] = useState(false);
@@ -20,15 +22,27 @@ export default function Home() {
   const sessionRef = useRef("");
   const [rounds, setRounds] = useState([]);
   const [minWins, setMinWins] = useState(0);
+  const [lang, setLang] = useState("en");
+  const t = T[lang];
+
+  function pickLang(l) {
+    setLang(l);
+    try { localStorage.setItem("dw:lang", l); } catch {}
+  }
 
   useEffect(() => {
-    const t = new URLSearchParams(window.location.search).get("p") || "";
-    if (!t) {
+    const qs = new URLSearchParams(window.location.search);
+    let l = qs.get("lang");
+    try { l = l || localStorage.getItem("dw:lang"); } catch {}
+    if (!l) l = (navigator.language || "").toLowerCase().startsWith("hi") ? "hi" : "en";
+    setLang(l === "hi" ? "hi" : "en");
+    const tk = qs.get("p") || "";
+    if (!tk) {
       setScreen("nolink");
       return;
     }
-    setToken(t);
-    fetch(`/api/play/info?t=${encodeURIComponent(t)}`, { cache: "no-store" })
+    setToken(tk);
+    fetch(`/api/play/info?t=${encodeURIComponent(tk)}`, { cache: "no-store" })
       .then(async (r) => {
         const d = await r.json();
         if (!r.ok) return setScreen("invalid");
@@ -36,7 +50,7 @@ export default function Home() {
         setScreen({ new: "intro", started: "used", failed: "failed", won: "done" }[d.status] || "invalid");
       })
       .catch(() => {
-        setError("Could not connect. Check your internet and reload.");
+        setErrKey("errConnect");
         setScreen("error");
       });
   }, []);
@@ -46,12 +60,12 @@ export default function Home() {
       const r = await fetch("/api/play/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ t: token }),
+        body: JSON.stringify({ t: token, lang }),
       });
       const d = await r.json();
       if (r.status === 409) return setScreen("used");
       if (!r.ok) {
-        setError(d.error || "Something went wrong");
+        setError(d.error || ""); setErrKey(d.error ? "" : "errGeneric");
         return setScreen("error");
       }
       sessionRef.current = d.sessionKey;
@@ -59,7 +73,7 @@ export default function Home() {
       setMinWins(d.minWins);
       setScreen("game");
     } catch {
-      setError("Could not connect. Check your internet and try again.");
+      setErrKey("errConnect2");
       setScreen("error");
     }
   }
@@ -74,13 +88,13 @@ export default function Home() {
       });
       const d = await r.json();
       if (!r.ok) {
-        setError(d.error || "Something went wrong");
+        setError(d.error || ""); setErrKey(d.error ? "" : "errGeneric");
         return setScreen("error");
       }
       setOutcome(d);
       setScreen(d.passed ? "wheel" : "failed");
     } catch {
-      setError("Could not send your score. Please contact the organiser.");
+      setErrKey("errSend");
       setScreen("error");
     }
   }
@@ -99,95 +113,101 @@ export default function Home() {
 
   const game = info?.game;
   const wins = outcome?.wins ?? info?.wins;
+  const title = lang === "hi" && (!game?.name || game.name === DEFAULT_TITLE) ? T.hi.title : game?.name || t.title;
 
   return (
     <>
     <Toran />
     <main className="page">
-      <h1 className="title"><Icon name="diya" size={38} /> {game?.name || "Diwali Lucky Wheel"} <Icon name="diya" size={38} /></h1>
-      {info?.name && <p className="sub">Happy Diwali, <b>{info.name}</b>!</p>}
+      {screen !== "game" && screen !== "submitting" && (
+        <div className="langbar" role="group" aria-label="Language">
+          <button className={"lang" + (lang === "en" ? " on" : "")} onClick={() => pickLang("en")}>English</button>
+          <button className={"lang" + (lang === "hi" ? " on" : "")} onClick={() => pickLang("hi")}>हिन्दी</button>
+        </div>
+      )}
+      <h1 className="title"><Icon name="diya" size={38} /> {title} <Icon name="diya" size={38} /></h1>
+      {info?.name && <p className="sub">{t.happy(info.name)}</p>}
 
-      {screen === "loading" && <p className="sub">Loading…</p>}
+      {screen === "loading" && <p className="sub">{t.loading}</p>}
 
       {screen === "nolink" && (
         <div className="card panel">
-          <h2>Personal link needed</h2>
-          <p>Please open the link the organiser sent you. Every player has their own link.</p>
+          <h2>{t.nolinkH}</h2>
+          <p>{t.nolinkP}</p>
         </div>
       )}
 
       {screen === "invalid" && (
         <div className="card panel">
-          <h2>Link not valid</h2>
-          <p>This link is wrong or was removed. Please ask the organiser for a new one.</p>
+          <h2>{t.invalidH}</h2>
+          <p>{t.invalidP}</p>
         </div>
       )}
 
       {screen === "error" && (
         <div className="card panel">
-          <h2>Oops</h2>
-          <p>{error}</p>
+          <h2>{t.oops}</h2>
+          <p>{errKey ? t[errKey] : error}</p>
         </div>
       )}
 
       {screen === "used" && (
         <div className="card panel">
-          <h2>Link already used</h2>
-          <p>This link works only one time and it has already been opened. If this was a mistake, ask the organiser to reset it.</p>
+          <h2>{t.usedH}</h2>
+          <p>{t.usedP}</p>
         </div>
       )}
 
       {screen === "intro" && game && (
         <div className="card panel">
-          <h2>How to play</h2>
+          <h2>{t.howH}</h2>
           <p>
-            Play <b>{game.rounds}</b> quick timed rounds, mixed together. Win at least <b>{game.minWins}</b> to unlock the Lucky Wheel.
+            {t.p1} <b>{game.rounds}</b> {t.p2} <b>{game.minWins}</b> {t.p3}
           </p>
           <ul className="rules">
-            {GAME_KEYS.filter((k) => game.games?.[k]).map((k) => (
-              <li key={k}>
-                <span className="chip" style={{ background: GAMES[k].color }}>{GAMES[k].glyph}</span>
-                <div><b>{GAMES[k].label}</b><span className="d">{GAMES[k].desc}</span></div>
-              </li>
-            ))}
+            {GAME_KEYS.filter((k) => game.games?.[k]).map((k) => {
+              const g = gameInfo(lang, k);
+              return (
+                <li key={k}>
+                  <span className="chip" style={{ background: g.color }}>{g.glyph}</span>
+                  <div><b>{g.label}</b><span className="d">{g.desc}</span></div>
+                </li>
+              );
+            })}
           </ul>
-          <p className="hint">This link works only one time. Once you press Start, you cannot play again. Don't close the page.</p>
+          <p className="hint">{t.hint}</p>
           <div className="actions" style={{ justifyContent: "center" }}>
-            <button className="btn spin-btn" onClick={start}>START</button>
+            <button className="btn spin-btn" onClick={start}>{t.start}</button>
           </div>
         </div>
       )}
 
       {screen === "game" && game && (
-        <Challenge rounds={rounds} minWins={minWins} onFinish={onFinish} />
+        <Challenge rounds={rounds} minWins={minWins} onFinish={onFinish} lang={lang} />
       )}
 
-      {screen === "submitting" && <p className="sub">Checking your score…</p>}
+      {screen === "submitting" && <p className="sub">{t.checking}</p>}
 
       {screen === "failed" && game && (
         <div className="card panel">
           <div className="center"><Icon name="lantern" size={72} /></div>
-          <h2>Better luck next time!</h2>
-          <p>
-            You won <b>{wins ?? 0}</b> of {outcome?.rounds ?? game.rounds} rounds. You needed {game.minWins} to unlock the wheel.
-          </p>
-          <p>Happy Diwali! 🪔</p>
+          <h2>{t.failedH}</h2>
+          <p>{t.failedP(wins ?? 0, outcome?.rounds ?? game.rounds, game.minWins)}</p>
+          <p>{t.happyShort}</p>
         </div>
       )}
 
       {screen === "wheel" && outcome && game && (
         <div className="stage">
-          <p className="sub">
-            🎉 You won <b>{outcome.wins}</b> of {outcome.rounds ?? game.rounds} rounds! Spin the wheel for your gift.
-          </p>
+          <p className="sub">{t.wheelMsg(outcome.wins, outcome.rounds ?? game.rounds)}</p>
           <Wheel gifts={outcome.gifts} spin={spin} onDone={onWheelDone} />
           {won ? (
             <div className="played">
-              Your gift: <b>{won.emoji} {won.name}</b>. Show this screen to the organiser.
+              {t.yourGift} <b>{won.emoji} {won.name}</b>. {t.showOrg}
             </div>
           ) : (
             <button className="btn spin-btn" onClick={spinWheel} disabled={spinning}>
-              {spinning ? "Spinning..." : "🪔 SPIN 🪔"}
+              {spinning ? t.spinning : t.spin}
             </button>
           )}
         </div>
@@ -196,15 +216,15 @@ export default function Home() {
       {screen === "done" && info?.gift && (
         <div className="card panel">
           <div className="big-emoji">{info.gift.emoji}</div>
-          <h2>You already played</h2>
+          <h2>{t.doneH}</h2>
           <p>
-            Your gift: <b>{info.gift.name}</b>
+            {t.yourGift} <b>{info.gift.name}</b>
           </p>
-          <p>Show this screen to the organiser. Happy Diwali! 🪔</p>
+          <p>{t.showOrg2}</p>
         </div>
       )}
 
-      {showModal && won && <ResultModal result={won} onClose={() => setShowModal(false)} />}
+      {showModal && won && <ResultModal result={won} onClose={() => setShowModal(false)} lang={lang} />}
     </main>
     </>
   );

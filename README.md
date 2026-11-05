@@ -2,6 +2,9 @@
 
 Next.js (App Router) game for Vercel.
 
+## Languages
+Players can switch between **English** and **हिन्दी** at the top of their page (it also follows the phone language, or open the link with `&lang=hi`). In Hindi, all text, the funny questions, the jokes and the word-scramble hints are in Hindi. The live internet sources only give English, so Hindi games use the built-in Hindi bank (`lib/funny.js`, easy to extend). Gift names and the game name are whatever you type in admin.
+
 ## How the game works
 1. Organiser opens `/admin`, adds player names and gets one personal link per player (`/?p=...`).
 2. Player opens their link and plays **10 timed rounds**, mixed at random (each type can be switched on or off in admin):

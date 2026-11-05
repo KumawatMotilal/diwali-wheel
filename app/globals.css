@@ -122,3 +122,9 @@ th { color: var(--maroon); font-size: 12px; text-transform: uppercase; letter-sp
 
 .tile.pop { animation: pop .22s ease-out; }
 @keyframes pop { from { transform: scale(.55); opacity: .3; } to { transform: scale(1); opacity: 1; } }
+
+/* language switch + Hindi (Devanagari) fonts */
+.langbar { display: flex; justify-content: center; gap: 6px; margin: 4px 0 10px; }
+.lang { padding: 6px 16px; border-radius: 999px; border: 1px solid #e3c98f; background: #fffdf8; color: var(--ink); font-size: 14px; cursor: pointer; }
+.lang.on { background: var(--saffron); border-color: var(--saffron); color: #fff; font-weight: 700; }
+body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Devanagari", "Nirmala UI", Mangal, sans-serif; }

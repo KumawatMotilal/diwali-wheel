@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { CATS, GAMES, ROUND_LABELS } from "@/lib/cats";
+import { CATS, gameInfo } from "@/lib/cats";
+import { T } from "@/lib/i18n";
 import Icon from "@/components/Icon";
 
 // Plays the rounds prepared by the server. The browser never receives quiz/math/pattern/word answers,
@@ -25,14 +26,14 @@ function useCountdown(ms, onEnd, stopped) {
   return left;
 }
 
-function Head({ type, sub, left, ms, done }) {
-  const g = GAMES[type];
+function Head({ type, sub, left, ms, done, t, lang }) {
+  const g = gameInfo(lang, type);
   return (
     <>
       <div className="qmeta">
         <span className="chip" style={{ background: g.color }}>{g.glyph}</span>
         <b>{sub || g.label}</b>
-        <span className="secs">{done ? "locked" : left != null ? Math.ceil(left / 1000) + "s" : ""}</span>
+        <span className="secs">{done ? t.locked : left != null ? Math.ceil(left / 1000) + t.secs : ""}</span>
       </div>
       {ms ? <div className="timebar"><div style={{ width: (done || left == null ? 0 : (left / ms) * 100) + "%" }} /></div> : null}
     </>
@@ -46,7 +47,8 @@ function useSettle(onDone) {
 }
 
 // ---------- Tap the Diya ----------
-function TapRound({ round, onDone }) {
+function TapRound({ round, onDone, lang }) {
+  const t = T[lang];
   const [phase, setPhase] = useState("wait");
   const [picked, settle] = useSettle(onDone);
   useEffect(() => {
@@ -58,10 +60,10 @@ function TapRound({ round, onDone }) {
   }, [phase]);
   const done = picked !== null;
   const icon = (i) => round.lit.find((l) => l.i === i)?.icon;
-  const msg = !done ? (phase === "wait" ? "Get ready…" : "Tap the real diya only!") : picked === round.diya ? "Nice!" : picked === -1 ? "Too slow" : "Wrong one";
+  const msg = !done ? (phase === "wait" ? t.ready : t.tapReal) : picked === round.diya ? t.nice : picked === -1 ? t.slow : t.wrong;
   return (
     <>
-      <Head type="tap" />
+      <Head type="tap"  t={t} lang={lang} />
       <div className="grid3">
         {Array.from({ length: 9 }, (_, i) => {
           let cls = "tile", n = null;
@@ -79,47 +81,50 @@ function TapRound({ round, onDone }) {
 }
 
 // ---------- Quiz / Quick Math / Number Pattern (multiple choice) ----------
-function ChoiceRound({ round, onDone }) {
+function ChoiceRound({ round, onDone, lang }) {
+  const t = T[lang];
   const [picked, settle] = useSettle(onDone);
   const done = picked !== null;
   const left = useCountdown(round.ms, () => settle(-1), done);
-  const catLabel = round.type === "quiz" ? CATS[round.cat]?.label || ROUND_LABELS[round.cat] : round.type === "joke" ? "Pick the punchline" : null;
+  const catLabel = round.type === "quiz" ? CATS[round.cat]?.label || t.cats[round.cat] : round.type === "joke" ? t.pickPunch : null;
   const big = round.type === "math" || round.type === "sequence";
   return (
     <>
-      <Head type={round.type} sub={catLabel} left={left} ms={round.ms} done={done} />
+      <Head type={round.type} sub={catLabel} left={left} ms={round.ms} done={done}  t={t} lang={lang} />
       <div className={"question" + (big ? " bigq" : "")}>{round.q}</div>
       <div className="choices">
         {round.options.map((o, i) => (
           <button key={i} className={"choice" + (picked === i ? " picked" : "")} disabled={done} onClick={() => settle(i)}>{o}</button>
         ))}
       </div>
-      <div className="msg">{done ? (picked === -1 ? "Time up" : "Answer locked in") : "\u00a0"}</div>
+      <div className="msg">{done ? (picked === -1 ? t.timeUp : t.lockedIn) : "\u00a0"}</div>
     </>
   );
 }
 
 // ---------- Odd One Out ----------
-function OddRound({ round, onDone }) {
+function OddRound({ round, onDone, lang }) {
+  const t = T[lang];
   const [picked, settle] = useSettle(onDone);
   const done = picked !== null;
   const left = useCountdown(round.ms, () => settle(-1), done);
   return (
     <>
-      <Head type="odd" left={left} ms={round.ms} done={done} />
-      <div className="question">Tap the icon that is different</div>
+      <Head type="odd" left={left} ms={round.ms} done={done}  t={t} lang={lang} />
+      <div className="question">{t.oddQ}</div>
       <div className="grid4">
         {round.cells.map((c, i) => (
           <button key={i} className={"tile sm" + (picked === i ? " picked" : "")} disabled={done} onClick={() => settle(i)}><Icon name={c} size={34} /></button>
         ))}
       </div>
-      <div className="msg">{done ? (picked === -1 ? "Time up" : "Answer locked in") : "\u00a0"}</div>
+      <div className="msg">{done ? (picked === -1 ? t.timeUp : t.lockedIn) : "\u00a0"}</div>
     </>
   );
 }
 
 // ---------- Word Scramble ----------
-function ScrambleRound({ round, onDone }) {
+function ScrambleRound({ round, onDone, lang }) {
+  const t = T[lang];
   const [used, setUsed] = useState([]);
   const [fin, settle] = useSettle(onDone);
   const done = fin !== null;
@@ -128,8 +133,8 @@ function ScrambleRound({ round, onDone }) {
   const full = used.length === round.letters.length;
   return (
     <>
-      <Head type="scramble" left={left} ms={round.ms} done={done} />
-      <div className="question">Hint: {round.hint}</div>
+      <Head type="scramble" left={left} ms={round.ms} done={done}  t={t} lang={lang} />
+      <div className="question">{t.hintLbl} {round.hint}</div>
       <div className="slots">
         {round.letters.map((_, n) => <span key={n} className="slot">{text[n] || ""}</span>)}
       </div>
@@ -139,16 +144,17 @@ function ScrambleRound({ round, onDone }) {
         ))}
       </div>
       <div className="actions" style={{ justifyContent: "center" }}>
-        <button className="btn ghost" disabled={done || !used.length} onClick={() => setUsed(used.slice(0, -1))}>Undo</button>
-        <button className="btn" disabled={done || !full} onClick={() => settle(text)}>Lock in</button>
+        <button className="btn ghost" disabled={done || !used.length} onClick={() => setUsed(used.slice(0, -1))}>{t.undo}</button>
+        <button className="btn" disabled={done || !full} onClick={() => settle(text)}>{t.lockBtn}</button>
       </div>
-      <div className="msg">{done ? "Answer locked in" : "\u00a0"}</div>
+      <div className="msg">{done ? t.lockedIn : "\u00a0"}</div>
     </>
   );
 }
 
 // ---------- Laddu or Boom ----------
-function LadduRound({ round, onDone }) {
+function LadduRound({ round, onDone, lang }) {
+  const t = T[lang];
   const [step, setStep] = useState(-1); // -1 = get ready
   const [mark, setMark] = useState(null); // { cell, ok } for the tapped pop
   const [fin, settle] = useSettle(onDone);
@@ -174,11 +180,11 @@ function LadduRound({ round, onDone }) {
     else setMark({ cell, ok: true });
   }
   const boom = done && mark && !mark.ok;
-  const msg = boom ? "BOOM! That was a cracker 💥" : done ? "Answer locked in" : step < 0 ? "Get ready…" : "Tap laddus 🍬 — dodge crackers 💥";
+  const msg = boom ? t.boom : done ? t.lockedIn : step < 0 ? t.ready : t.ladduHint;
   return (
     <>
-      <Head type="laddu" />
-      <div className="question">Pop {Math.max(step + 1, 0)} / {total}</div>
+      <Head type="laddu"  t={t} lang={lang} />
+      <div className="question">{t.pop(Math.max(step + 1, 0), total)}</div>
       <div className="grid3">
         {Array.from({ length: 9 }, (_, i) => {
           const show = !done && cur && cur.cell === i && !mark;
@@ -195,7 +201,8 @@ function LadduRound({ round, onDone }) {
 
 // ---------- Diya Memory ----------
 const PADS = ["#f97316", "#be185d", "#15803d", "#4338ca"];
-function MemoryRound({ round, onDone }) {
+function MemoryRound({ round, onDone, lang }) {
+  const t = T[lang];
   const [phase, setPhase] = useState("watch");
   const [flash, setFlash] = useState(-1);
   const [taps, setTaps] = useState([]);
@@ -224,8 +231,8 @@ function MemoryRound({ round, onDone }) {
   }
   return (
     <>
-      <Head type="memory" left={phase === "play" ? left : null} ms={round.ms} done={done} />
-      <div className="question">{done ? "Answer locked in" : phase === "watch" ? "Watch the order…" : `Your turn: ${taps.length} / ${round.seq.length}`}</div>
+      <Head type="memory" left={phase === "play" ? left : null} ms={round.ms} done={done}  t={t} lang={lang} />
+      <div className="question">{done ? t.lockedIn : phase === "watch" ? t.watch : t.yourTurn(taps.length, round.seq.length)}</div>
       <div className="pads">
         {PADS.map((c, p) => (
           <button key={p} className={"pad" + (flash === p ? " on" : "")} style={{ "--pad": c }} disabled={phase !== "play" || done} onClick={() => tap(p)} aria-label={`diya ${p + 1}`}>
@@ -237,7 +244,8 @@ function MemoryRound({ round, onDone }) {
   );
 }
 
-export default function Challenge({ rounds, minWins, onFinish }) {
+export default function Challenge({ rounds, minWins, onFinish, lang = "en" }) {
+  const t = T[lang];
   const [i, setI] = useState(0);
   const answers = useRef([]);
   const doneFor = useRef(-1);
@@ -259,9 +267,9 @@ export default function Challenge({ rounds, minWins, onFinish }) {
   return (
     <div className="stage">
       <div className="card game">
-        <div className="head">Round <b>{i + 1}</b> of {rounds.length} · win {minWins} to unlock the wheel</div>
+        <div className="head">{t.roundOf(i + 1, rounds.length, minWins)}</div>
         <div className="dots">{rounds.map((_, n) => <span key={n} className={"dot" + (n < i ? " done" : n === i ? " now" : "")} />)}</div>
-        <View key={i} round={round} onDone={done} />
+        <View key={i} round={round} onDone={done} lang={lang} />
       </div>
     </div>
   );

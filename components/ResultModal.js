@@ -1,8 +1,10 @@
 "use client";
 import { useMemo } from "react";
 import Icon from "@/components/Icon";
+import { T } from "@/lib/i18n";
 
-export default function ResultModal({ result, onClose }) {
+export default function ResultModal({ result, onClose, lang = "en" }) {
+  const t = T[lang];
   const pieces = useMemo(
     () =>
       Array.from({ length: 36 }, (_, i) => ({
@@ -27,11 +29,11 @@ export default function ResultModal({ result, onClose }) {
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="center"><Icon name="gift" size={84} /></div>
         <div className="big" style={{ fontSize: 56 }}>{result.emoji}</div>
-        <p>Congratulations! You won</p>
+        <p>{t.congrats}</p>
         <h3>{result.name}</h3>
-        <p>Happy Diwali! 🪔</p>
+        <p>{t.happyShort}</p>
         <div className="actions" style={{ justifyContent: "center" }}>
-          <button className="btn" onClick={onClose}>OK</button>
+          <button className="btn" onClick={onClose}>{t.ok}</button>
         </div>
       </div>
     </div>
