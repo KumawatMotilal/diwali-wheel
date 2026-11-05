@@ -5,7 +5,9 @@ Next.js (App Router) game for Vercel.
 ## How the game works
 1. Organiser opens `/admin`, adds player names and gets one personal link per player (`/?p=...`).
 2. Player opens their link and plays **10 timed rounds**, mixed at random (each type can be switched on or off in admin):
-   - **Quiz**: Bollywood, Gujarat, India history, politics, Diwali and festivals, sports, general knowledge (100 questions, editable).
+   - **Surprise Quiz**: easy random questions picked **live from the internet** (Open Trivia DB, every topic, no categories), mixed with silly built-in questions ("What sound does a cow make?" with options like *Namaste* and *Wi-Fi connected*).
+   - **Punchline Match**: a clean joke is fetched live (JokeAPI, safe mode); pick the right punchline out of four.
+   - **Laddu or Boom**: 8 things pop up one by one. Tap the laddus, never tap a cracker (you may miss one laddu).
    - **Quick Math**: fast sums with order-of-operations traps.
    - **Word Scramble**: unscramble Diwali / India / Gujarat words from a hint.
    - **Number Pattern**: find the next number (adding, doubling, squares, growing steps).
@@ -17,8 +19,8 @@ Next.js (App Router) game for Vercel.
 5. Each link works **one time only**. Once started, it cannot be opened again, even in another browser.
    Admin can press **Reset** to give a player one more chance (new random questions).
 
-Admin can change game name, rounds, minimum wins, tap / quiz / math time, which round types and quiz categories are used,
-add / edit / delete quiz questions (mark the correct option with the green dot), gift names and luck. Changes apply instantly.
+Admin can change game name, rounds, minimum wins, tap / quiz / math time, which round types are used,
+add / edit / delete backup quiz questions (mark the correct option with the green dot), gift names and luck. Changes apply instantly.
 
 ## Run locally
 ```bash
@@ -35,6 +37,7 @@ Open http://localhost:3000/admin (local password: `diwali123`). Local mode uses 
 4. Redeploy. Open `https://your-app.vercel.app/admin`.
 
 ## Notes
+- Live questions are fetched on the server when a player presses Start (3.5 s limit per service, in parallel). If a service fails, built-in funny questions and jokes are used instead. Questions you add in admin are used only as a last backup.
 - The luck result is decided on the server, so players cannot change it.
 - Quiz, math, pattern and word answers are **graded on the server**. The correct answers are never sent to the browser (not in the page code, not in the API responses).
   The browser only sends back what the player picked.

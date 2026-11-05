@@ -261,14 +261,10 @@ export default function Admin() {
               </label>
             ))}
           </div>
-          <label className="field" style={{ marginTop: 8 }}>Quiz categories</label>
-          <div className="checks">
-            {CAT_KEYS.map((k) => (
-              <label className="check" key={k}>
-                <input type="checkbox" checked={cfg.cats.includes(k)} onChange={() => toggle("cats", k)} /> {CATS[k].emoji} {CATS[k].label}
-              </label>
-            ))}
-          </div>
+          <p className="hint" style={{ marginTop: 8 }}>
+            Quiz questions are picked live from the internet (random easy topics, no categories), mixed with funny built-in questions.
+            The questions you add below are only used as a backup if everything else is unavailable.
+          </p>
 
           <div className="head" style={{ marginTop: 14 }}>Emoji · Gift name · Luck (higher = wins more often)</div>
           {cfg.gifts.map((g) => {

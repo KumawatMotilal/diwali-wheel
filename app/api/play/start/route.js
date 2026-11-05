@@ -4,6 +4,7 @@ import { buildPlan } from "@/lib/game";
 import { claimStart, getConfig, getPlayer, savePlan, savePlayer } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 20; // live questions are fetched here (each source has a 3.5 s limit)
 
 // One-time start. The first browser to call this gets a session key and the rounds
 // (questions only, never the answers). Every other call gets 409 "already used".
@@ -17,7 +18,7 @@ export async function POST(req) {
       return Response.json({ error: "This link has already been used", status: p.status }, { status: 409 });
     }
     const cfg = await getConfig();
-    const plan = buildPlan(cfg);
+    const plan = await buildPlan(cfg);
     const sessionKey = randomBytes(16).toString("base64url");
     const ok = await claimStart(t, sessionKey);
     if (!ok) return Response.json({ error: "This link has already been used", status: "started" }, { status: 409 });

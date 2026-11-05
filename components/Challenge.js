@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { CATS, GAMES } from "@/lib/cats";
+import { CATS, GAMES, ROUND_LABELS } from "@/lib/cats";
 import Icon from "@/components/Icon";
 
 // Plays the rounds prepared by the server. The browser never receives quiz/math/pattern/word answers,
@@ -83,11 +83,11 @@ function ChoiceRound({ round, onDone }) {
   const [picked, settle] = useSettle(onDone);
   const done = picked !== null;
   const left = useCountdown(round.ms, () => settle(-1), done);
-  const cat = round.type === "quiz" ? CATS[round.cat] : null;
-  const big = round.type !== "quiz";
+  const catLabel = round.type === "quiz" ? CATS[round.cat]?.label || ROUND_LABELS[round.cat] : round.type === "joke" ? "Pick the punchline" : null;
+  const big = round.type === "math" || round.type === "sequence";
   return (
     <>
-      <Head type={round.type} sub={cat?.label} left={left} ms={round.ms} done={done} />
+      <Head type={round.type} sub={catLabel} left={left} ms={round.ms} done={done} />
       <div className={"question" + (big ? " bigq" : "")}>{round.q}</div>
       <div className="choices">
         {round.options.map((o, i) => (
@@ -143,6 +143,52 @@ function ScrambleRound({ round, onDone }) {
         <button className="btn" disabled={done || !full} onClick={() => settle(text)}>Lock in</button>
       </div>
       <div className="msg">{done ? "Answer locked in" : "\u00a0"}</div>
+    </>
+  );
+}
+
+// ---------- Laddu or Boom ----------
+function LadduRound({ round, onDone }) {
+  const [step, setStep] = useState(-1); // -1 = get ready
+  const [mark, setMark] = useState(null); // { cell, ok } for the tapped pop
+  const [fin, settle] = useSettle(onDone);
+  const taps = useRef([]);
+  const tappedNow = useRef(-1);
+  const done = fin !== null;
+  const total = round.steps.length;
+  useEffect(() => {
+    if (done) return;
+    const t = setTimeout(() => {
+      if (step + 1 >= total) settle(taps.current);
+      else { setMark(null); setStep(step + 1); }
+    }, step === -1 ? 900 : round.stepMs);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, done]);
+  const cur = step >= 0 && step < total ? round.steps[step] : null;
+  function tap(cell) {
+    if (done || !cur || cell !== cur.cell || tappedNow.current === step) return;
+    tappedNow.current = step;
+    taps.current = [...taps.current, step];
+    if (cur.kind === "boom") { setMark({ cell, ok: false }); settle(taps.current); }
+    else setMark({ cell, ok: true });
+  }
+  const boom = done && mark && !mark.ok;
+  const msg = boom ? "BOOM! That was a cracker 💥" : done ? "Answer locked in" : step < 0 ? "Get ready…" : "Tap laddus 🍬 — dodge crackers 💥";
+  return (
+    <>
+      <Head type="laddu" />
+      <div className="question">Pop {Math.max(step + 1, 0)} / {total}</div>
+      <div className="grid3">
+        {Array.from({ length: 9 }, (_, i) => {
+          const show = !done && cur && cur.cell === i && !mark;
+          let cls = "tile", n = null;
+          if (show) { cls += " lit pop"; n = cur.kind === "laddu" ? "laddu" : "cracker"; }
+          if (mark && mark.cell === i) { cls += mark.ok ? " ok" : " bad"; n = mark.ok ? "laddu" : "cracker"; }
+          return <button key={i} className={cls} aria-label={`tile ${i + 1}`} onClick={() => tap(i)}>{n && <Icon name={n} size={42} />}</button>;
+        })}
+      </div>
+      <div className="msg">{msg}</div>
     </>
   );
 }
@@ -209,7 +255,7 @@ export default function Challenge({ rounds, minWins, onFinish }) {
     }, 900);
   }
 
-  const View = { tap: TapRound, odd: OddRound, scramble: ScrambleRound, memory: MemoryRound }[round.type] || ChoiceRound;
+  const View = { tap: TapRound, odd: OddRound, scramble: ScrambleRound, memory: MemoryRound, laddu: LadduRound }[round.type] || ChoiceRound;
   return (
     <div className="stage">
       <div className="card game">
