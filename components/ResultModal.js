@@ -1,5 +1,6 @@
 "use client";
 import { useMemo } from "react";
+import Icon from "@/components/Icon";
 
 export default function ResultModal({ result, onClose }) {
   const pieces = useMemo(
@@ -24,7 +25,8 @@ export default function ResultModal({ result, onClose }) {
         </span>
       ))}
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="big">{result.emoji}</div>
+        <div className="center"><Icon name="gift" size={84} /></div>
+        <div className="big" style={{ fontSize: 56 }}>{result.emoji}</div>
         <p>Congratulations! You won</p>
         <h3>{result.name}</h3>
         <p>Happy Diwali! 🪔</p>

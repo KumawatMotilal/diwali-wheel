@@ -1,7 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { newId } from "@/lib/ids";
-import { CATS, CAT_KEYS } from "@/lib/cats";
+import { CATS, CAT_KEYS, GAMES, GAME_KEYS } from "@/lib/cats";
+import Icon, { Toran } from "@/components/Icon";
 
 const EMOJIS = ["🎁", "🍬", "🪔", "🪙", "🥜", "🎨", "🍫", "🎆", "📱", "💰"];
 
@@ -140,12 +141,12 @@ export default function Admin() {
     }));
   const toggle = (group, key) =>
     setCfg((c) => {
-      const cur = group === "cats" ? c.cats : Object.keys(c.games).filter((k) => c.games[k]);
+      const cur = group === "cats" ? c.cats : GAME_KEYS.filter((k) => c.games[k]);
       const next = cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key];
       if (!next.length) return c; // keep at least one
       return group === "cats"
         ? { ...c, cats: next }
-        : { ...c, games: { quiz: next.includes("quiz"), tap: next.includes("tap"), math: next.includes("math") } };
+        : { ...c, games: Object.fromEntries(GAME_KEYS.map((k) => [k, next.includes(k)])) };
     });
   const addQuestion = () =>
     setCfg((c) => ({
@@ -159,18 +160,18 @@ export default function Admin() {
   // ---------- login ----------
   if (!authed) {
     return (
-      <main className="page">
-        <h1 className="title">🪔 Admin 🪔</h1>
+      <><Toran /><main className="page">
+        <h1 className="title"><Icon name="diya" size={36} /> Admin <Icon name="diya" size={36} /></h1>
         <form className="card panel" onSubmit={login}>
           <h2>Organiser login</h2>
           <input type="password" placeholder="Admin password" value={key} onChange={(e) => setKey(e.target.value)}
-            style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid rgba(251,191,36,.4)", background: "rgba(0,0,0,.3)", color: "#fff", fontSize: 15 }} />
+            />
           <div className="actions" style={{ justifyContent: "center" }}>
             <button className="btn" type="submit">Login</button>
           </div>
           {msg && <p className="err">{msg}</p>}
         </form>
-      </main>
+      </main></>
     );
   }
 
@@ -182,8 +183,8 @@ export default function Admin() {
   const label = { new: "Not played", started: "Started / used", failed: "Lost", won: "Won" };
 
   return (
-    <main className="page">
-      <h1 className="title">🪔 Diwali Game Admin 🪔</h1>
+    <><Toran /><main className="page">
+      <h1 className="title"><Icon name="diya" size={36} /> Diwali Game Admin <Icon name="diya" size={36} /></h1>
       <p className="sub">Set up the game, add players, and send each person their own one-time link.</p>
 
       {db === "memory" && (
@@ -228,6 +229,11 @@ export default function Admin() {
               <input type="number" min="3000" max="60000" step="1000" value={cfg.mathMs}
                 onChange={(e) => setCfg({ ...cfg, mathMs: Number(e.target.value) })} />
             </div>
+            <div>
+              <label className="field">Puzzle time (ms)</label>
+              <input type="number" min="5000" max="90000" step="1000" value={cfg.puzzleMs}
+                onChange={(e) => setCfg({ ...cfg, puzzleMs: Number(e.target.value) })} />
+            </div>
           </div>
           <p className="hint" style={{ marginTop: 0 }}>
             Players must win {cfg.minWins} of {cfg.rounds} rounds to unlock the wheel. Lower times make it harder.
@@ -235,9 +241,9 @@ export default function Admin() {
 
           <label className="field" style={{ marginTop: 12 }}>Round types (mixed in every game)</label>
           <div className="checks">
-            {[["quiz", "🧠 Quiz"], ["math", "🧮 Quick Math"], ["tap", "🪔 Tap the Diya"]].map(([k, l]) => (
+            {GAME_KEYS.map((k) => (
               <label className="check" key={k}>
-                <input type="checkbox" checked={!!cfg.games[k]} onChange={() => toggle("games", k)} /> {l}
+                <input type="checkbox" checked={!!cfg.games[k]} onChange={() => toggle("games", k)} /> {GAMES[k].label}
               </label>
             ))}
           </div>
@@ -375,6 +381,6 @@ export default function Admin() {
           </div>
         ))}
       </section>
-    </main>
+    </main></>
   );
 }

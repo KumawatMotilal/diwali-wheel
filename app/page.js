@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import Wheel from "@/components/Wheel";
 import Challenge from "@/components/Challenge";
 import ResultModal from "@/components/ResultModal";
-import { CATS } from "@/lib/cats";
+import { CATS, GAMES, GAME_KEYS } from "@/lib/cats";
+import Icon, { Toran } from "@/components/Icon";
 
 // Player page. Opened with the personal one-time link:  /?p=<token>
 export default function Home() {
@@ -100,8 +101,10 @@ export default function Home() {
   const wins = outcome?.wins ?? info?.wins;
 
   return (
+    <>
+    <Toran />
     <main className="page">
-      <h1 className="title">🪔 {game?.name || "Diwali Lucky Wheel"} 🪔</h1>
+      <h1 className="title"><Icon name="diya" size={38} /> {game?.name || "Diwali Lucky Wheel"} <Icon name="diya" size={38} /></h1>
       {info?.name && <p className="sub">Happy Diwali, <b>{info.name}</b>!</p>}
 
       {screen === "loading" && <p className="sub">Loading…</p>}
@@ -137,16 +140,17 @@ export default function Home() {
       {screen === "intro" && game && (
         <div className="card panel">
           <h2>How to play</h2>
-          <p style={{ lineHeight: 1.7 }}>
-            🪔 You play <b>{game.rounds}</b> quick rounds, mixed together:
-            {game.games?.quiz && <><br />🧠 <b>Quiz</b> ({game.cats.map((c) => CATS[c].label).join(", ")})</>}
-            {game.games?.math && <><br />🧮 <b>Quick Math</b></>}
-            {game.games?.tap && <><br />🪔 <b>Tap the Diya</b>: tap only the real diya, ignore the decoys</>}
-            <br />
-            🏆 Win at least <b>{game.minWins}</b> of {game.rounds} rounds to unlock the Lucky Wheel. Every round is timed.
-            <br />
-            🎁 Spin the wheel and win a gift based on your luck.
+          <p>
+            Play <b>{game.rounds}</b> quick timed rounds, mixed together. Win at least <b>{game.minWins}</b> to unlock the Lucky Wheel.
           </p>
+          <ul className="rules">
+            {GAME_KEYS.filter((k) => game.games?.[k]).map((k) => (
+              <li key={k}>
+                <span className="chip" style={{ background: GAMES[k].color }}>{GAMES[k].glyph}</span>
+                <div><b>{GAMES[k].label}</b><span className="d">{GAMES[k].desc}</span></div>
+              </li>
+            ))}
+          </ul>
           <p className="hint">This link works only one time. Once you press Start, you cannot play again. Don't close the page.</p>
           <div className="actions" style={{ justifyContent: "center" }}>
             <button className="btn spin-btn" onClick={start}>START</button>
@@ -162,7 +166,7 @@ export default function Home() {
 
       {screen === "failed" && game && (
         <div className="card panel">
-          <div className="big-emoji">🙏</div>
+          <div className="center"><Icon name="lantern" size={72} /></div>
           <h2>Better luck next time!</h2>
           <p>
             You won <b>{wins ?? 0}</b> of {outcome?.rounds ?? game.rounds} rounds. You needed {game.minWins} to unlock the wheel.
@@ -202,5 +206,6 @@ export default function Home() {
 
       {showModal && won && <ResultModal result={won} onClose={() => setShowModal(false)} />}
     </main>
+    </>
   );
 }
