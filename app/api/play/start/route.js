@@ -1,11 +1,12 @@
 import { randomBytes } from "node:crypto";
 import { err, validToken } from "@/lib/auth";
-import { claimStart, getPlayer, savePlayer } from "@/lib/store";
+import { buildPlan } from "@/lib/game";
+import { claimStart, getConfig, getPlayer, savePlan, savePlayer } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
-// One-time start. The first browser to call this gets a session key,
-// every other call (same or another browser) gets 409 "already used".
+// One-time start. The first browser to call this gets a session key and the rounds
+// (questions only, never the answers). Every other call gets 409 "already used".
 export async function POST(req) {
   try {
     const { t } = await req.json().catch(() => ({}));
@@ -15,11 +16,15 @@ export async function POST(req) {
     if (p.status !== "new") {
       return Response.json({ error: "This link has already been used", status: p.status }, { status: 409 });
     }
+    const cfg = await getConfig();
+    const plan = buildPlan(cfg);
     const sessionKey = randomBytes(16).toString("base64url");
     const ok = await claimStart(t, sessionKey);
     if (!ok) return Response.json({ error: "This link has already been used", status: "started" }, { status: 409 });
+    // the answer key stays on the server
+    await savePlan(t, { types: plan.types, key: plan.key, minWins: cfg.minWins });
     await savePlayer(t, { ...p, status: "started", startedAt: Date.now() });
-    return Response.json({ sessionKey });
+    return Response.json({ sessionKey, rounds: plan.rounds, minWins: cfg.minWins });
   } catch (e) {
     return err(e);
   }

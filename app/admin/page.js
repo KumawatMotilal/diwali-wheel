@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { newId } from "@/lib/config";
+import { newId } from "@/lib/ids";
+import { CATS, CAT_KEYS } from "@/lib/cats";
 
 const EMOJIS = ["🎁", "🍬", "🪔", "🪙", "🥜", "🎨", "🍫", "🎆", "📱", "💰"];
 
@@ -15,6 +16,7 @@ export default function Admin() {
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState("");
   const [copied, setCopied] = useState("");
+  const [qfilter, setQfilter] = useState("all");
   const keyRef = useRef("");
 
   const api = useCallback(async (path, opts = {}) => {
@@ -78,9 +80,10 @@ export default function Admin() {
   const saveCfg = () =>
     run(async () => {
       const d = await api("/api/admin/config", { method: "POST", body: JSON.stringify(cfg) });
+      const dropped = cfg.questions.length - d.config.questions.length;
       setCfg(d.config);
-      setSaved("Saved ✓");
-      setTimeout(() => setSaved(""), 2000);
+      setSaved(dropped > 0 ? `Saved ✓ (${dropped} incomplete question${dropped > 1 ? "s" : ""} removed)` : "Saved ✓");
+      setTimeout(() => setSaved(""), 3500);
     });
 
   const addPlayers = () =>
@@ -128,6 +131,31 @@ export default function Admin() {
   const setGift = (id, patch) =>
     setCfg((c) => ({ ...c, gifts: c.gifts.map((g) => (g.id === id ? { ...g, ...patch } : g)) }));
 
+  const setQ = (id, patch) =>
+    setCfg((c) => ({ ...c, questions: c.questions.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+  const setOpt = (id, n, v) =>
+    setCfg((c) => ({
+      ...c,
+      questions: c.questions.map((x) => (x.id === id ? { ...x, options: x.options.map((o, k) => (k === n ? v : o)) } : x)),
+    }));
+  const toggle = (group, key) =>
+    setCfg((c) => {
+      const cur = group === "cats" ? c.cats : Object.keys(c.games).filter((k) => c.games[k]);
+      const next = cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key];
+      if (!next.length) return c; // keep at least one
+      return group === "cats"
+        ? { ...c, cats: next }
+        : { ...c, games: { quiz: next.includes("quiz"), tap: next.includes("tap"), math: next.includes("math") } };
+    });
+  const addQuestion = () =>
+    setCfg((c) => ({
+      ...c,
+      questions: [
+        { id: newId(), cat: qfilter === "all" ? "general" : qfilter, q: "", options: ["", "", "", ""], answer: 0 },
+        ...c.questions,
+      ],
+    }));
+
   // ---------- login ----------
   if (!authed) {
     return (
@@ -150,6 +178,7 @@ export default function Admin() {
 
   const totalWeight = cfg.gifts.reduce((s, g) => s + Math.max(0, Number(g.weight) || 0), 0);
   const count = (s) => players.filter((p) => p.status === s).length;
+  const shownQs = cfg.questions.filter((x) => qfilter === "all" || x.cat === qfilter);
   const label = { new: "Not played", started: "Started / used", failed: "Lost", won: "Won" };
 
   return (
@@ -188,9 +217,38 @@ export default function Admin() {
                 onChange={(e) => setCfg({ ...cfg, reactionMs: Number(e.target.value) })} />
             </div>
           </div>
+          <div className="cfg-grid">
+            <div>
+              <label className="field">Quiz time (ms)</label>
+              <input type="number" min="3000" max="60000" step="1000" value={cfg.quizMs}
+                onChange={(e) => setCfg({ ...cfg, quizMs: Number(e.target.value) })} />
+            </div>
+            <div>
+              <label className="field">Math time (ms)</label>
+              <input type="number" min="3000" max="60000" step="1000" value={cfg.mathMs}
+                onChange={(e) => setCfg({ ...cfg, mathMs: Number(e.target.value) })} />
+            </div>
+          </div>
           <p className="hint" style={{ marginTop: 0 }}>
-            Players must win {cfg.minWins} of {cfg.rounds} rounds to unlock the wheel. Lower "Tap time" makes it harder.
+            Players must win {cfg.minWins} of {cfg.rounds} rounds to unlock the wheel. Lower times make it harder.
           </p>
+
+          <label className="field" style={{ marginTop: 12 }}>Round types (mixed in every game)</label>
+          <div className="checks">
+            {[["quiz", "🧠 Quiz"], ["math", "🧮 Quick Math"], ["tap", "🪔 Tap the Diya"]].map(([k, l]) => (
+              <label className="check" key={k}>
+                <input type="checkbox" checked={!!cfg.games[k]} onChange={() => toggle("games", k)} /> {l}
+              </label>
+            ))}
+          </div>
+          <label className="field" style={{ marginTop: 8 }}>Quiz categories</label>
+          <div className="checks">
+            {CAT_KEYS.map((k) => (
+              <label className="check" key={k}>
+                <input type="checkbox" checked={cfg.cats.includes(k)} onChange={() => toggle("cats", k)} /> {CATS[k].emoji} {CATS[k].label}
+              </label>
+            ))}
+          </div>
 
           <div className="head" style={{ marginTop: 14 }}>Emoji · Gift name · Luck (higher = wins more often)</div>
           {cfg.gifts.map((g) => {
@@ -277,6 +335,46 @@ export default function Admin() {
           </p>
         </section>
       </div>
+
+      {/* ---------- question bank ---------- */}
+      <section className="card" style={{ marginTop: 24 }}>
+        <h2>Quiz Questions ({cfg.questions.length})</h2>
+        <p className="hint" style={{ marginTop: 0 }}>
+          Each game picks random questions from the categories ticked above. Mark the correct answer with the green dot. Answers are checked on the server and are never sent to players.
+          Press "Save settings" after editing.
+        </p>
+        <div className="actions" style={{ marginBottom: 12 }}>
+          <select className="sel" value={qfilter} onChange={(e) => setQfilter(e.target.value)}>
+            <option value="all">All categories</option>
+            {CAT_KEYS.map((k) => (
+              <option key={k} value={k}>{CATS[k].label} ({cfg.questions.filter((x) => x.cat === k).length})</option>
+            ))}
+          </select>
+          <button className="btn ghost" onClick={addQuestion}>+ Add question</button>
+          <button className="btn" onClick={saveCfg} disabled={busy}>{saved || "Save settings"}</button>
+        </div>
+        {shownQs.length === 0 && <p className="hint">No questions here yet.</p>}
+        {shownQs.map((x) => (
+          <div className="qbox" key={x.id}>
+            <div className="qtop">
+              <select className="sel" value={x.cat} onChange={(e) => setQ(x.id, { cat: e.target.value })}>
+                {CAT_KEYS.map((k) => <option key={k} value={k}>{CATS[k].label}</option>)}
+              </select>
+              <input type="text" placeholder="Question" value={x.q} onChange={(e) => setQ(x.id, { q: e.target.value })} />
+              <button className="btn danger" title="Delete question"
+                onClick={() => setCfg({ ...cfg, questions: cfg.questions.filter((y) => y.id !== x.id) })}>✕</button>
+            </div>
+            <div className="qopts">
+              {x.options.map((o, n) => (
+                <label key={n} className={"qopt" + (x.answer === n ? " right" : "")}>
+                  <input type="radio" name={"ans-" + x.id} checked={x.answer === n} onChange={() => setQ(x.id, { answer: n })} />
+                  <input type="text" placeholder={`Option ${n + 1}`} value={o} onChange={(e) => setOpt(x.id, n, e.target.value)} />
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+      </section>
     </main>
   );
 }

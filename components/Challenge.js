@@ -1,111 +1,156 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { CATS } from "@/lib/cats";
 
-// "Tap the Diya": a diya lights up on one of 9 tiles. Tap it in time to win the round.
-// Wrong tile or too slow = lost round. Plays `rounds` rounds, reports total wins.
-export default function Challenge({ rounds, minWins, reactionMs, onFinish }) {
-  const [round, setRound] = useState(1);
-  const [wins, setWins] = useState(0);
-  const [results, setResults] = useState([]);
+// Plays the rounds the server prepared. The browser never sees the answers:
+// it only collects what the player chose and sends it to the server at the end.
+//   quiz / math -> option index (0-3), -1 if time ran out
+//   tap         -> tile index (0-8), -1 if time ran out
+
+// ---------- Tap the Diya (with decoys) ----------
+function TapRound({ round, onDone }) {
   const [phase, setPhase] = useState("wait"); // wait | show | result
-  const [active, setActive] = useState(-1);
-  const [flash, setFlash] = useState(null);
-  const winsRef = useRef(0);
-  const lastRef = useRef(-1);
-  const lockRef = useRef(false);
-  const finishRef = useRef(onFinish);
-  finishRef.current = onFinish;
+  const [picked, setPicked] = useState(null);
+  const lock = useRef(false);
 
-  function settle(ok, idx) {
-    if (lockRef.current) return;
-    lockRef.current = true;
-    if (ok) {
-      winsRef.current += 1;
-      setWins(winsRef.current);
-    }
-    setResults((r) => [...r, ok]);
-    setFlash({ idx, ok });
+  function settle(v) {
+    if (lock.current) return;
+    lock.current = true;
+    setPicked(v);
     setPhase("result");
+    onDone(v);
   }
 
   useEffect(() => {
     let t;
-    if (phase === "wait") {
-      t = setTimeout(() => {
-        let i;
-        do {
-          i = Math.floor(Math.random() * 9);
-        } while (i === lastRef.current);
-        lastRef.current = i;
-        setActive(i);
-        setPhase("show");
-      }, 500 + Math.random() * 700);
-    } else if (phase === "show") {
-      t = setTimeout(() => settle(false, active), reactionMs);
-    } else {
-      t = setTimeout(() => {
-        if (round >= rounds) {
-          finishRef.current(winsRef.current);
-        } else {
-          lockRef.current = false;
-          setRound((r) => r + 1);
-          setActive(-1);
-          setFlash(null);
-          setPhase("wait");
-        }
-      }, 700);
-    }
+    if (phase === "wait") t = setTimeout(() => setPhase("show"), 400 + Math.random() * 700);
+    else if (phase === "show") t = setTimeout(() => settle(-1), round.ms);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, round]);
+  }, [phase]);
 
-  function tap(i) {
-    if (phase !== "show") return;
-    settle(i === active, i);
+  const litIcon = (i) => round.lit.find((l) => l.i === i)?.icon;
+  const msg =
+    phase === "wait" ? "Get ready…" :
+    phase === "show" ? "Tap the real diya 🪔 only!" :
+    picked === round.diya ? "Nice! ✅" : picked === -1 ? "Too slow ⏱" : "Wrong one ❌";
+
+  return (
+    <>
+      <div className="grid3">
+        {Array.from({ length: 9 }, (_, i) => {
+          let cls = "tile";
+          let content = "";
+          if (phase === "show" && litIcon(i)) {
+            cls += " lit";
+            content = litIcon(i);
+          }
+          if (phase === "result") {
+            if (i === picked) {
+              const ok = i === round.diya;
+              cls += ok ? " ok" : " bad";
+              content = ok ? "✅" : "❌";
+            } else if (i === round.diya) {
+              cls += " lit dim";
+              content = "🪔";
+            }
+          }
+          return (
+            <button key={i} className={cls} aria-label={`tile ${i + 1}`} onClick={() => phase === "show" && settle(i)}>
+              {content}
+            </button>
+          );
+        })}
+      </div>
+      <div className="msg">{msg}</div>
+    </>
+  );
+}
+
+// ---------- Quiz and Quick Math (multiple choice with a countdown) ----------
+function ChoiceRound({ round, onDone }) {
+  const [left, setLeft] = useState(round.ms);
+  const [picked, setPicked] = useState(null);
+  const lock = useRef(false);
+
+  function settle(v) {
+    if (lock.current) return;
+    lock.current = true;
+    setPicked(v);
+    onDone(v);
   }
 
-  const message =
-    phase === "wait" ? "Get ready…" : phase === "show" ? "TAP THE DIYA! 🪔" : flash?.ok ? "Nice! ✅" : "Missed ❌";
+  useEffect(() => {
+    const end = Date.now() + round.ms;
+    const id = setInterval(() => {
+      const l = end - Date.now();
+      if (l <= 0) {
+        clearInterval(id);
+        setLeft(0);
+        settle(-1);
+      } else setLeft(l);
+    }, 100);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const cat = round.type === "quiz" ? CATS[round.cat] : null;
+  const done = picked !== null;
+
+  return (
+    <>
+      <div className="qmeta">
+        <span>{round.type === "math" ? "🧮 Quick Math" : `${cat?.emoji || "❓"} ${cat?.label || "Quiz"}`}</span>
+        <span>{done ? "🔒" : `${Math.ceil(left / 1000)}s`}</span>
+      </div>
+      <div className="timebar"><div style={{ width: (done ? 0 : (left / round.ms) * 100) + "%" }} /></div>
+      <div className={"question" + (round.type === "math" ? " mathq" : "")}>{round.q}</div>
+      <div className="choices">
+        {round.options.map((o, i) => (
+          <button key={i} className={"choice" + (picked === i ? " picked" : "")} disabled={done} onClick={() => settle(i)}>
+            {o}
+          </button>
+        ))}
+      </div>
+      <div className="msg">{done ? (picked === -1 ? "Time up ⏱" : "Answer locked in 🔒") : "\u00a0"}</div>
+    </>
+  );
+}
+
+export default function Challenge({ rounds, minWins, onFinish }) {
+  const [i, setI] = useState(0);
+  const answers = useRef([]);
+  const doneFor = useRef(-1);
+  const finishRef = useRef(onFinish);
+  finishRef.current = onFinish;
+  const round = rounds[i];
+
+  function done(v) {
+    if (doneFor.current === i) return;
+    doneFor.current = i;
+    answers.current[i] = v;
+    setTimeout(() => {
+      if (i + 1 >= rounds.length) finishRef.current(answers.current);
+      else setI(i + 1);
+    }, round.type === "tap" ? 800 : 900);
+  }
 
   return (
     <div className="stage">
-      <div className="card" style={{ width: "min(92vw, 420px)", textAlign: "center" }}>
+      <div className="card" style={{ width: "min(92vw, 440px)", textAlign: "center" }}>
         <div className="head" style={{ fontSize: 15 }}>
-          Round <b>{round}</b> / {rounds} · Wins <b>{wins}</b> (need {minWins})
+          Round <b>{i + 1}</b> / {rounds.length} · Win {minWins} to unlock the wheel
         </div>
         <div className="dots">
-          {Array.from({ length: rounds }, (_, i) => (
-            <span
-              key={i}
-              className={"dot" + (results[i] === true ? " ok" : results[i] === false ? " bad" : i === round - 1 ? " now" : "")}
-            />
+          {rounds.map((_, n) => (
+            <span key={n} className={"dot" + (n < i ? " done" : n === i ? " now" : "")} />
           ))}
         </div>
-        <div className="grid3">
-          {Array.from({ length: 9 }, (_, i) => {
-            let cls = "tile";
-            let content = "";
-            if (phase === "show" && i === active) {
-              cls += " lit";
-              content = "🪔";
-            }
-            if (phase === "result" && flash) {
-              if (i === flash.idx) {
-                cls += flash.ok ? " ok" : " bad";
-                content = flash.ok ? "✅" : "❌";
-              } else if (!flash.ok && i === active) {
-                cls += " lit dim";
-                content = "🪔";
-              }
-            }
-            return (
-              <button key={i} className={cls} onClick={() => tap(i)} aria-label={`tile ${i + 1}`}>
-                {content}
-              </button>
-            );
-          })}
-        </div>
-        <div className="msg">{message}</div>
+        {round.type === "tap" ? (
+          <TapRound key={i} round={round} onDone={done} />
+        ) : (
+          <ChoiceRound key={i} round={round} onDone={done} />
+        )}
       </div>
     </div>
   );

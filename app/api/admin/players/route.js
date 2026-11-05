@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { checkAdmin, deny, err, validToken } from "@/lib/auth";
-import { clearStart, deletePlayer, getPlayer, savePlayer } from "@/lib/store";
+import { clearPlan, clearStart, deletePlayer, getPlayer, savePlayer } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +38,7 @@ export async function PATCH(req) {
     const p = await getPlayer(token);
     if (!p) return Response.json({ error: "Player not found" }, { status: 404 });
     await clearStart(token);
+    await clearPlan(token);
     await savePlayer(token, { name: p.name, status: "new", wins: null, gift: null, createdAt: p.createdAt });
     return Response.json({ ok: true });
   } catch (e) {

@@ -102,3 +102,32 @@ textarea {
   width: 100%; min-height: 90px; padding: 9px 10px; border-radius: 10px; border: 1px solid rgba(251,191,36,.4);
   background: rgba(0,0,0,.3); color: #fff; font-size: 15px; font-family: inherit;
 }
+
+/* ---- quiz and math rounds ---- */
+.qmeta { display: flex; justify-content: space-between; font-size: 14px; opacity: .85; margin: 14px 0 6px; }
+.timebar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.15); overflow: hidden; margin-bottom: 14px; }
+.timebar > div { height: 100%; background: var(--gold); }
+.question { font-size: 19px; font-weight: 600; line-height: 1.4; min-height: 54px; margin-bottom: 14px; }
+.question.mathq { font-size: 34px; letter-spacing: .02em; }
+.choices { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }
+.choice {
+  padding: 13px 12px; border-radius: 12px; border: 1px solid rgba(251,191,36,.45); background: rgba(255,255,255,.08);
+  color: #fff7e0; font-size: 16px; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.choice:hover:not(:disabled) { background: rgba(255,255,255,.16); }
+.choice:disabled { cursor: default; opacity: .6; }
+.choice.picked { opacity: 1; border-color: var(--gold); border-width: 2px; }
+.dot.done { background: var(--gold); }
+
+/* ---- admin: question editor ---- */
+.sel { padding: 9px 10px; border-radius: 10px; border: 1px solid rgba(251,191,36,.4); background: rgba(255,255,255,.08); color: #fff; font-size: 14px; }
+.sel option { color: #000; }
+.checks { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 6px 0 4px; }
+.checks .check { margin: 4px 0; }
+.qbox { border: 1px solid rgba(251,191,36,.25); border-radius: 12px; padding: 10px; margin-bottom: 10px; }
+.qtop { display: grid; grid-template-columns: 170px 1fr 44px; gap: 8px; margin-bottom: 8px; }
+.qopts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.qopt { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 10px; border: 1px solid transparent; }
+.qopt.right { border-color: #4ade80; }
+.qopt input[type=radio] { accent-color: #4ade80; width: 18px; height: 18px; flex: none; }
+@media (max-width: 700px) { .qtop { grid-template-columns: 1fr 44px; } .qtop .sel { grid-column: 1 / -1; } .qopts { grid-template-columns: 1fr; } }

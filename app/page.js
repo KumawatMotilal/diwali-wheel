@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Wheel from "@/components/Wheel";
 import Challenge from "@/components/Challenge";
 import ResultModal from "@/components/ResultModal";
+import { CATS } from "@/lib/cats";
 
 // Player page. Opened with the personal one-time link:  /?p=<token>
 export default function Home() {
@@ -16,6 +17,8 @@ export default function Home() {
   const [won, setWon] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const sessionRef = useRef("");
+  const [rounds, setRounds] = useState([]);
+  const [minWins, setMinWins] = useState(0);
 
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get("p") || "";
@@ -51,6 +54,8 @@ export default function Home() {
         return setScreen("error");
       }
       sessionRef.current = d.sessionKey;
+      setRounds(d.rounds);
+      setMinWins(d.minWins);
       setScreen("game");
     } catch {
       setError("Could not connect. Check your internet and try again.");
@@ -58,13 +63,13 @@ export default function Home() {
     }
   }
 
-  async function onFinish(wins) {
+  async function onFinish(answers) {
     setScreen("submitting");
     try {
       const r = await fetch("/api/play/finish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ t: token, sessionKey: sessionRef.current, wins }),
+        body: JSON.stringify({ t: token, sessionKey: sessionRef.current, answers }),
       });
       const d = await r.json();
       if (!r.ok) {
@@ -133,9 +138,12 @@ export default function Home() {
         <div className="card panel">
           <h2>How to play</h2>
           <p style={{ lineHeight: 1.7 }}>
-            🪔 You play <b>{game.rounds}</b> quick rounds. A diya lights up on the board, tap it fast!
+            🪔 You play <b>{game.rounds}</b> quick rounds, mixed together:
+            {game.games?.quiz && <><br />🧠 <b>Quiz</b> ({game.cats.map((c) => CATS[c].label).join(", ")})</>}
+            {game.games?.math && <><br />🧮 <b>Quick Math</b></>}
+            {game.games?.tap && <><br />🪔 <b>Tap the Diya</b>: tap only the real diya, ignore the decoys</>}
             <br />
-            🏆 Win at least <b>{game.minWins}</b> of {game.rounds} rounds to unlock the Lucky Wheel.
+            🏆 Win at least <b>{game.minWins}</b> of {game.rounds} rounds to unlock the Lucky Wheel. Every round is timed.
             <br />
             🎁 Spin the wheel and win a gift based on your luck.
           </p>
@@ -147,7 +155,7 @@ export default function Home() {
       )}
 
       {screen === "game" && game && (
-        <Challenge rounds={game.rounds} minWins={game.minWins} reactionMs={game.reactionMs} onFinish={onFinish} />
+        <Challenge rounds={rounds} minWins={minWins} onFinish={onFinish} />
       )}
 
       {screen === "submitting" && <p className="sub">Checking your score…</p>}
@@ -157,7 +165,7 @@ export default function Home() {
           <div className="big-emoji">🙏</div>
           <h2>Better luck next time!</h2>
           <p>
-            You won <b>{wins ?? 0}</b> of {game.rounds} rounds. You needed {game.minWins} to unlock the wheel.
+            You won <b>{wins ?? 0}</b> of {outcome?.rounds ?? game.rounds} rounds. You needed {game.minWins} to unlock the wheel.
           </p>
           <p>Happy Diwali! 🪔</p>
         </div>
@@ -166,7 +174,7 @@ export default function Home() {
       {screen === "wheel" && outcome && game && (
         <div className="stage">
           <p className="sub">
-            🎉 You won <b>{outcome.wins}</b> of {game.rounds} rounds! Spin the wheel for your gift.
+            🎉 You won <b>{outcome.wins}</b> of {outcome.rounds ?? game.rounds} rounds! Spin the wheel for your gift.
           </p>
           <Wheel gifts={outcome.gifts} spin={spin} onDone={onWheelDone} />
           {won ? (

@@ -1,4 +1,5 @@
 import { err, validToken } from "@/lib/auth";
+import { CATS } from "@/lib/cats";
 import { getConfig, getPlayer } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,13 @@ export async function GET(req) {
       status: p.status,
       wins: p.wins ?? null,
       gift: p.gift || null,
-      game: { name: cfg.name, rounds: cfg.rounds, minWins: cfg.minWins, reactionMs: cfg.reactionMs },
+      game: {
+        name: cfg.name,
+        rounds: cfg.rounds,
+        minWins: cfg.minWins,
+        games: cfg.games,
+        cats: (cfg.cats || []).filter((c) => CATS[c]),
+      },
     });
   } catch (e) {
     return err(e);
