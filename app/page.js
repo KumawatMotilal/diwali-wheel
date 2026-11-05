@@ -1,251 +1,198 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
-import Wheel from "../components/Wheel";
-import {
-  DEFAULT_CONFIG,
-  decodeConfig,
-  encodeConfig,
-  hashStr,
-  newId,
-  pickWeighted,
-} from "../lib/config";
+import { useEffect, useRef, useState } from "react";
+import Wheel from "@/components/Wheel";
+import Challenge from "@/components/Challenge";
+import ResultModal from "@/components/ResultModal";
 
-const STORE_KEY = "diwali-wheel-config";
-const EMOJIS = ["🎁", "🍬", "🪔", "🪙", "🥜", "🎨", "🍫", "🎆", "📱", "💰"];
-
+// Player page. Opened with the personal one-time link:  /?p=<token>
 export default function Home() {
-  const [config, setConfig] = useState(DEFAULT_CONFIG);
-  const [mode, setMode] = useState("edit"); // edit | play
-  const [ready, setReady] = useState(false);
+  const [token, setToken] = useState("");
+  const [info, setInfo] = useState(null);
+  const [screen, setScreen] = useState("loading");
+  const [error, setError] = useState("");
+  const [outcome, setOutcome] = useState(null);
   const [spin, setSpin] = useState(null);
   const [spinning, setSpinning] = useState(false);
-  const [result, setResult] = useState(null);
-  const [previous, setPrevious] = useState(null);
-  const [copied, setCopied] = useState(false);
-  const pendingRef = useRef(null);
+  const [won, setWon] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const sessionRef = useRef("");
 
-  // Load: shared link (?g=...) => player mode, otherwise saved editor config
   useEffect(() => {
-    const g = new URLSearchParams(window.location.search).get("g");
-    const shared = g ? decodeConfig(g) : null;
-    if (shared) {
-      setConfig(shared);
-      setMode("play");
-    } else {
-      try {
-        const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
-        if (saved && Array.isArray(saved.gifts) && saved.gifts.length >= 2) setConfig(saved);
-      } catch {}
+    const t = new URLSearchParams(window.location.search).get("p") || "";
+    if (!t) {
+      setScreen("nolink");
+      return;
     }
-    setReady(true);
+    setToken(t);
+    fetch(`/api/play/info?t=${encodeURIComponent(t)}`, { cache: "no-store" })
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) return setScreen("invalid");
+        setInfo(d);
+        setScreen({ new: "intro", started: "used", failed: "failed", won: "done" }[d.status] || "invalid");
+      })
+      .catch(() => {
+        setError("Could not connect. Check your internet and reload.");
+        setScreen("error");
+      });
   }, []);
 
-  useEffect(() => {
-    if (ready && mode === "edit") {
-      try {
-        localStorage.setItem(STORE_KEY, JSON.stringify(config));
-      } catch {}
-    }
-  }, [config, ready, mode]);
-
-  const gameKey = useMemo(() => "diwali-played-" + hashStr(encodeConfig(config)), [config]);
-
-  // In player mode with "one spin" rule, remember what this device already won
-  useEffect(() => {
-    if (mode !== "play" || !ready) return;
+  async function start() {
     try {
-      setPrevious(localStorage.getItem(gameKey));
-    } catch {}
-  }, [mode, ready, gameKey]);
-
-  const validGifts = config.gifts.filter((g) => g.name.trim());
-  const totalWeight = validGifts.reduce((s, g) => s + Math.max(0, Number(g.weight) || 0), 0);
-  const locked = mode === "play" && config.oneSpin && previous;
-
-  function startSpin() {
-    if (spinning || locked || validGifts.length < 2) return;
-    const index = pickWeighted(validGifts); // luck decided here
-    pendingRef.current = validGifts[index];
-    setResult(null);
-    setSpinning(true);
-    setSpin({ index, nonce: Date.now() });
-  }
-
-  function onDone() {
-    setSpinning(false);
-    const won = pendingRef.current;
-    setResult(won);
-    if (mode === "play" && config.oneSpin && won) {
-      try {
-        localStorage.setItem(gameKey, `${won.emoji} ${won.name}`);
-      } catch {}
-      setPrevious(`${won.emoji} ${won.name}`);
-    }
-  }
-
-  function updateGift(id, patch) {
-    setConfig((c) => ({ ...c, gifts: c.gifts.map((g) => (g.id === id ? { ...g, ...patch } : g)) }));
-  }
-  function addGift() {
-    setConfig((c) => ({
-      ...c,
-      gifts: [
-        ...c.gifts,
-        { id: newId(), name: "New Gift", emoji: EMOJIS[c.gifts.length % EMOJIS.length], weight: 10 },
-      ],
-    }));
-  }
-  function removeGift(id) {
-    setConfig((c) => (c.gifts.length <= 2 ? c : { ...c, gifts: c.gifts.filter((g) => g.id !== id) }));
-  }
-
-  function shareUrl() {
-    return `${window.location.origin}/?g=${encodeConfig({ ...config, gifts: validGifts })}`;
-  }
-  async function copyLink() {
-    try {
-      await navigator.clipboard.writeText(shareUrl());
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      const r = await fetch("/api/play/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ t: token }),
+      });
+      const d = await r.json();
+      if (r.status === 409) return setScreen("used");
+      if (!r.ok) {
+        setError(d.error || "Something went wrong");
+        return setScreen("error");
+      }
+      sessionRef.current = d.sessionKey;
+      setScreen("game");
     } catch {
-      window.prompt("Copy this link:", shareUrl());
+      setError("Could not connect. Check your internet and try again.");
+      setScreen("error");
     }
   }
 
-  if (!ready) return null;
-
-  const wheelBlock = (
-    <div className="stage">
-      <Wheel gifts={validGifts.length >= 2 ? validGifts : DEFAULT_CONFIG.gifts} spin={spin} onDone={onDone} />
-      {locked ? (
-        <div className="played">
-          You already played! Your gift: <b>{previous}</b>
-        </div>
-      ) : (
-        <button className="btn spin-btn" onClick={startSpin} disabled={spinning || validGifts.length < 2}>
-          {spinning ? "Spinning..." : "🪔 SPIN 🪔"}
-        </button>
-      )}
-    </div>
-  );
-
-  // ---------- Player mode ----------
-  if (mode === "play") {
-    return (
-      <main className="page">
-        <h1 className="title">🪔 {config.name} 🪔</h1>
-        <p className="sub">Happy Diwali! Spin the wheel and see your luck.</p>
-        {wheelBlock}
-        {result && <ResultModal result={result} onClose={() => setResult(null)} />}
-      </main>
-    );
+  async function onFinish(wins) {
+    setScreen("submitting");
+    try {
+      const r = await fetch("/api/play/finish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ t: token, sessionKey: sessionRef.current, wins }),
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        setError(d.error || "Something went wrong");
+        return setScreen("error");
+      }
+      setOutcome(d);
+      setScreen(d.passed ? "wheel" : "failed");
+    } catch {
+      setError("Could not send your score. Please contact the organiser.");
+      setScreen("error");
+    }
   }
 
-  // ---------- Editor mode ----------
+  function spinWheel() {
+    if (spinning || won || !outcome) return;
+    setSpinning(true);
+    setSpin({ index: outcome.giftIndex, nonce: Date.now() });
+  }
+
+  function onWheelDone() {
+    setSpinning(false);
+    setWon(outcome.gifts[outcome.giftIndex]);
+    setShowModal(true);
+  }
+
+  const game = info?.game;
+  const wins = outcome?.wins ?? info?.wins;
+
   return (
     <main className="page">
-      <h1 className="title">🪔 Diwali Lucky Wheel 🪔</h1>
-      <p className="sub">Set your game name and gifts, then share the link with players.</p>
+      <h1 className="title">🪔 {game?.name || "Diwali Lucky Wheel"} 🪔</h1>
+      {info?.name && <p className="sub">Happy Diwali, <b>{info.name}</b>!</p>}
 
-      <div className="layout edit">
-        <section className="card">
-          <h2>Game Setup</h2>
-          <label className="field">Game name</label>
-          <input
-            type="text"
-            value={config.name}
-            onChange={(e) => setConfig({ ...config, name: e.target.value })}
-          />
+      {screen === "loading" && <p className="sub">Loading…</p>}
 
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={config.oneSpin}
-              onChange={(e) => setConfig({ ...config, oneSpin: e.target.checked })}
-            />
-            Only one spin per player (per device)
-          </label>
-
-          <div className="head">Emoji · Gift name · Luck (higher = wins more often)</div>
-          {config.gifts.map((g) => {
-            const pct = totalWeight > 0 ? ((Math.max(0, Number(g.weight) || 0) / totalWeight) * 100).toFixed(1) : "0";
-            return (
-              <div className="row" key={g.id}>
-                <input type="text" value={g.emoji} maxLength={4} onChange={(e) => updateGift(g.id, { emoji: e.target.value })} />
-                <input type="text" value={g.name} onChange={(e) => updateGift(g.id, { name: e.target.value })} />
-                <div>
-                  <input
-                    type="number"
-                    min="0"
-                    value={g.weight}
-                    onChange={(e) => updateGift(g.id, { weight: e.target.value === "" ? 0 : Number(e.target.value) })}
-                  />
-                  <div className="pct">{pct}% chance</div>
-                </div>
-                <button className="btn danger" onClick={() => removeGift(g.id)} title="Remove">
-                  ✕
-                </button>
-              </div>
-            );
-          })}
-
-          <div className="actions">
-            <button className="btn" onClick={addGift}>+ Add gift</button>
-            <button className="btn ghost" onClick={() => setConfig(DEFAULT_CONFIG)}>Reset</button>
-          </div>
-
-          <div className="actions">
-            <button className="btn" onClick={copyLink}>{copied ? "Copied!" : "Copy player link"}</button>
-            <button className="btn ghost" onClick={() => window.open(shareUrl(), "_blank")}>Open player page</button>
-          </div>
-          <p className="hint">
-            The player link contains your game name and gifts, so any change here needs a new link.
-            Player view hides the luck percentages. A gift with luck 0 is never won.
-          </p>
-        </section>
-
-        <section className="card">
-          <h2>Preview (test spin, not locked)</h2>
-          {wheelBlock}
-        </section>
-      </div>
-
-      {result && <ResultModal result={result} onClose={() => setResult(null)} />}
-    </main>
-  );
-}
-
-function ResultModal({ result, onClose }) {
-  const pieces = useMemo(
-    () =>
-      Array.from({ length: 36 }, (_, i) => ({
-        left: Math.random() * 100,
-        delay: Math.random() * 1.2,
-        dur: 2.5 + Math.random() * 2.5,
-        ch: ["🎉", "✨", "🪔", "🎆", "🪙"][i % 5],
-      })),
-    []
-  );
-  return (
-    <div className="overlay" onClick={onClose}>
-      {pieces.map((p, i) => (
-        <span
-          key={i}
-          className="confetti"
-          style={{ left: p.left + "vw", animationDelay: p.delay + "s", animationDuration: p.dur + "s" }}
-        >
-          {p.ch}
-        </span>
-      ))}
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="big">{result.emoji}</div>
-        <p>Congratulations! You won</p>
-        <h3>{result.name}</h3>
-        <p>Happy Diwali! 🪔</p>
-        <div className="actions" style={{ justifyContent: "center" }}>
-          <button className="btn" onClick={onClose}>OK</button>
+      {screen === "nolink" && (
+        <div className="card panel">
+          <h2>Personal link needed</h2>
+          <p>Please open the link the organiser sent you. Every player has their own link.</p>
         </div>
-      </div>
-    </div>
+      )}
+
+      {screen === "invalid" && (
+        <div className="card panel">
+          <h2>Link not valid</h2>
+          <p>This link is wrong or was removed. Please ask the organiser for a new one.</p>
+        </div>
+      )}
+
+      {screen === "error" && (
+        <div className="card panel">
+          <h2>Oops</h2>
+          <p>{error}</p>
+        </div>
+      )}
+
+      {screen === "used" && (
+        <div className="card panel">
+          <h2>Link already used</h2>
+          <p>This link works only one time and it has already been opened. If this was a mistake, ask the organiser to reset it.</p>
+        </div>
+      )}
+
+      {screen === "intro" && game && (
+        <div className="card panel">
+          <h2>How to play</h2>
+          <p style={{ lineHeight: 1.7 }}>
+            🪔 You play <b>{game.rounds}</b> quick rounds. A diya lights up on the board, tap it fast!
+            <br />
+            🏆 Win at least <b>{game.minWins}</b> of {game.rounds} rounds to unlock the Lucky Wheel.
+            <br />
+            🎁 Spin the wheel and win a gift based on your luck.
+          </p>
+          <p className="hint">This link works only one time. Once you press Start, you cannot play again. Don't close the page.</p>
+          <div className="actions" style={{ justifyContent: "center" }}>
+            <button className="btn spin-btn" onClick={start}>START</button>
+          </div>
+        </div>
+      )}
+
+      {screen === "game" && game && (
+        <Challenge rounds={game.rounds} minWins={game.minWins} reactionMs={game.reactionMs} onFinish={onFinish} />
+      )}
+
+      {screen === "submitting" && <p className="sub">Checking your score…</p>}
+
+      {screen === "failed" && game && (
+        <div className="card panel">
+          <div className="big-emoji">🙏</div>
+          <h2>Better luck next time!</h2>
+          <p>
+            You won <b>{wins ?? 0}</b> of {game.rounds} rounds. You needed {game.minWins} to unlock the wheel.
+          </p>
+          <p>Happy Diwali! 🪔</p>
+        </div>
+      )}
+
+      {screen === "wheel" && outcome && game && (
+        <div className="stage">
+          <p className="sub">
+            🎉 You won <b>{outcome.wins}</b> of {game.rounds} rounds! Spin the wheel for your gift.
+          </p>
+          <Wheel gifts={outcome.gifts} spin={spin} onDone={onWheelDone} />
+          {won ? (
+            <div className="played">
+              Your gift: <b>{won.emoji} {won.name}</b>. Show this screen to the organiser.
+            </div>
+          ) : (
+            <button className="btn spin-btn" onClick={spinWheel} disabled={spinning}>
+              {spinning ? "Spinning..." : "🪔 SPIN 🪔"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {screen === "done" && info?.gift && (
+        <div className="card panel">
+          <div className="big-emoji">{info.gift.emoji}</div>
+          <h2>You already played</h2>
+          <p>
+            Your gift: <b>{info.gift.name}</b>
+          </p>
+          <p>Show this screen to the organiser. Happy Diwali! 🪔</p>
+        </div>
+      )}
+
+      {showModal && won && <ResultModal result={won} onClose={() => setShowModal(false)} />}
+    </main>
   );
 }
