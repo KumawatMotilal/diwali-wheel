@@ -25,4 +25,7 @@ Or with CLI: `npx vercel --prod`
 ## Note
 "One spin per device" can be bypassed by clearing browser data or using another browser.
 For strict control at a real event, keep a person at the stall or add a backend with a code per player.
+<<<<<<< HEAD
 # diwali-wheel
+=======
+>>>>>>> cd1728ce96b2f946a9c33d62c930654e445f0044
